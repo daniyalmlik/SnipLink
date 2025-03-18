@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using SnipLink.Api.Data;
 using SnipLink.Api.Domain;
+using SnipLink.Api.Middleware;
 using SnipLink.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,17 +39,17 @@ builder.Services
 // ── Cookie auth — HttpOnly, Secure, SameSite=Strict ──────────────────────────
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.Cookie.HttpOnly    = true;
+    options.Cookie.HttpOnly     = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite   = SameSiteMode.Strict;
-    options.Cookie.Name       = "sniplink.auth";
-    options.ExpireTimeSpan    = TimeSpan.FromDays(7);
-    options.SlidingExpiration = true;
-    options.LoginPath         = "/api/auth/login";
-    options.LogoutPath        = "/api/auth/logout";
-    options.AccessDeniedPath  = "/api/auth/forbidden";
+    options.Cookie.SameSite     = SameSiteMode.Strict;
+    options.Cookie.Name         = "sniplink.auth";
+    options.ExpireTimeSpan      = TimeSpan.FromDays(7);
+    options.SlidingExpiration   = true;
+    options.LoginPath           = "/api/auth/login";
+    options.LogoutPath          = "/api/auth/logout";
+    options.AccessDeniedPath    = "/api/auth/forbidden";
 
-    // Return 401 JSON instead of redirecting API clients
+    // Return 401/403 JSON instead of redirecting API clients
     options.Events.OnRedirectToLogin = ctx =>
     {
         ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -64,44 +65,54 @@ builder.Services.ConfigureApplicationCookie(options =>
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 builder.Services.AddRateLimiter(options =>
 {
-    // Public redirect: 60 req/min per IP (sliding window)
-    options.AddSlidingWindowLimiter("Redirect", opt =>
+    // Authenticated link creation: token bucket — burst of 20, refill 10/min, queue 5
+    options.AddTokenBucketLimiter("CreateLink", opt =>
+    {
+        opt.TokenLimit            = 20;
+        opt.ReplenishmentPeriod   = TimeSpan.FromMinutes(1);
+        opt.TokensPerPeriod       = 10;
+        opt.AutoReplenishment     = true;
+        opt.QueueProcessingOrder  = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit            = 5;
+    });
+
+    // Public redirect: fixed window — 100 req/s, no queue (drop immediately)
+    options.AddFixedWindowLimiter("Redirect", opt =>
+    {
+        opt.PermitLimit          = 100;
+        opt.Window               = TimeSpan.FromSeconds(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit           = 0;
+    });
+
+    // Analytics + dashboard reads: fixed window — 60 req/min, queue 5
+    options.AddFixedWindowLimiter("Analytics", opt =>
     {
         opt.PermitLimit          = 60;
         opt.Window               = TimeSpan.FromMinutes(1);
-        opt.SegmentsPerWindow    = 6;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 0;
-    });
-
-    // Authenticated link creation: 20 req/min per user
-    options.AddSlidingWindowLimiter("CreateLink", opt =>
-    {
-        opt.PermitLimit          = 20;
-        opt.Window               = TimeSpan.FromMinutes(1);
-        opt.SegmentsPerWindow    = 6;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 0;
-    });
-
-    // Analytics + dashboard reads: 30 req/min
-    options.AddSlidingWindowLimiter("Analytics", opt =>
-    {
-        opt.PermitLimit          = 30;
-        opt.Window               = TimeSpan.FromMinutes(1);
-        opt.SegmentsPerWindow    = 6;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 0;
+        opt.QueueLimit           = 5;
     });
 
     options.OnRejected = async (ctx, ct) =>
     {
-        ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        ctx.HttpContext.Response.StatusCode  = StatusCodes.Status429TooManyRequests;
         ctx.HttpContext.Response.ContentType = "application/json";
         await ctx.HttpContext.Response.WriteAsync(
             """{"error":"Too many requests. Please slow down."}""", ct);
     };
 });
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+var allowedOrigin = builder.Configuration["Cors:AllowedOrigin"]
+    ?? throw new InvalidOperationException("Cors:AllowedOrigin is not configured.");
+
+builder.Services.AddCors(options =>
+    options.AddPolicy("BlazorClient", policy =>
+        policy.WithOrigins(allowedOrigin)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials()));
 
 // ── Application services ──────────────────────────────────────────────────────
 builder.Services.AddScoped<ISlugGenerator, SlugGenerator>();
@@ -116,15 +127,49 @@ builder.Services.AddSingleton<IClickTrackingQueue>(sp =>
     sp.GetRequiredService<ClickTrackingQueue>());
 builder.Services.AddHostedService<ClickTrackingWorker>();
 
+// ── Health checks ─────────────────────────────────────────────────────────────
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")!,
+        name: "sql",
+        tags: ["db", "sql"]);
+
+// ── Swagger (development only) ────────────────────────────────────────────────
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new() { Title = "SnipLink API", Version = "v1" });
+    // Allow sending the auth cookie from Swagger UI
+    options.AddSecurityDefinition("cookieAuth", new()
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In   = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
+        Name = "sniplink.auth"
+    });
+    options.AddSecurityRequirement(new()
+    {
+        [new() { Reference = new() { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "cookieAuth" } }] = []
+    });
+});
+
 builder.Services.AddControllers();
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "SnipLink v1"));
+}
+
 app.UseHttpsRedirection();
+app.UseMiddleware<SecurityHeadersMiddleware>();
+app.UseCors("BlazorClient");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHealthChecks("/healthz");
 app.MapControllers();
 
 app.Run();
