@@ -1,0 +1,90 @@
+## ── Claude Code / Anthropic AI tooling ──────────────────────────────────────
+.claude/
+CLAUDE.md
+.claudeignore
+claude.json
+
+## ── .NET ─────────────────────────────────────────────────────────────────────
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# dotnet tools manifest (keep .config/dotnet-tools.json but not local tool installs)
+.dotnet/
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+coverage*.xml
+coverage*.json
+coverage*.info
+*.coveragexml
+*.coverage
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+## ── Secrets / Environment ────────────────────────────────────────────────────
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+**/secrets.json
+**/*.pfx
+**/*.p12
+.env
+.env.*
+!.env.example
+
+## ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+## ── Docker ───────────────────────────────────────────────────────────────────
+# Keep Dockerfiles; ignore local compose overrides
+docker-compose.override.yml
