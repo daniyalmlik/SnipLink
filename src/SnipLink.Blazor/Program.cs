@@ -1,23 +1,37 @@
+using Radzen;
 using SnipLink.Blazor.Components;
+using SnipLink.Blazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddRadzenComponents();
+
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:7288";
+builder.Services.AddHttpClient("sniplink_api", client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false
+});
+
+builder.Services.AddScoped<SnipLinkApiClient>();
+builder.Services.AddScoped<AuthStateService>();
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-
 app.UseStaticFiles();
 app.UseAntiforgery();
 

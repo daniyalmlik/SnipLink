@@ -1,0 +1,122 @@
+@page "/login"
+@layout SnipLink.Blazor.Components.Layout.MinimalLayout
+@rendermode InteractiveServer
+@inject AuthStateService AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Login &mdash; SnipLink</PageTitle>
+
+<div class="login-container">
+    <RadzenCard class="login-card">
+        <h2 class="rz-mb-4">@(isRegister ? "Create Account" : "Sign In")</h2>
+
+        @if (errorMessage is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
+                @errorMessage
+            </RadzenAlert>
+        }
+
+        <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
+            @if (isRegister)
+            {
+                <RadzenFormField Text="Display Name" class="rz-w-100 rz-mb-3">
+                    <RadzenTextBox @bind-Value="@model.DisplayName" Placeholder="Your name" class="rz-w-100" />
+                </RadzenFormField>
+            }
+
+            <RadzenFormField Text="Email" class="rz-w-100 rz-mb-3">
+                <RadzenTextBox @bind-Value="@model.Email" Placeholder="you@example.com" InputType="InputType.Email" class="rz-w-100" />
+            </RadzenFormField>
+
+            <RadzenFormField Text="Password" class="rz-w-100 rz-mb-4">
+                <RadzenPassword @bind-Value="@model.Password" Placeholder="@(isRegister ? "Min 12 characters" : "Password")" class="rz-w-100" />
+            </RadzenFormField>
+
+            <RadzenButton ButtonType="ButtonType.Submit"
+                          Text="@(isRegister ? "Create Account" : "Sign In")"
+                          ButtonStyle="ButtonStyle.Primary"
+                          class="rz-w-100 rz-mb-3"
+                          IsBusy="@isLoading" />
+        </RadzenTemplateForm>
+
+        <p class="rz-text-align-center rz-text-secondary-500">
+            @if (isRegister)
+            {
+                <span>Already have an account? </span>
+                <RadzenLink Text="Sign in" Click="@(() => { isRegister = false; errorMessage = null; })" />
+            }
+            else
+            {
+                <span>No account? </span>
+                <RadzenLink Text="Create one" Click="@(() => { isRegister = true; errorMessage = null; })" />
+            }
+        </p>
+    </RadzenCard>
+</div>
+
+@code {
+    private bool isRegister;
+    private bool isLoading;
+    private string? errorMessage;
+    private readonly FormModel model = new();
+
+    protected override void OnInitialized()
+    {
+        if (AuthState.IsAuthenticated)
+            Nav.NavigateTo("/dashboard");
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            string? error;
+
+            if (isRegister)
+            {
+                if (string.IsNullOrWhiteSpace(model.DisplayName))
+                {
+                    errorMessage = "Display name is required.";
+                    return;
+                }
+                error = await AuthState.RegisterAsync(new RegisterRequest
+                {
+                    Email = model.Email,
+                    Password = model.Password,
+                    DisplayName = model.DisplayName
+                });
+            }
+            else
+            {
+                error = await AuthState.LoginAsync(new LoginRequest
+                {
+                    Email = model.Email,
+                    Password = model.Password
+                });
+            }
+
+            if (error is not null)
+            {
+                errorMessage = error;
+                return;
+            }
+
+            Nav.NavigateTo("/dashboard");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private class FormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+    }
+}

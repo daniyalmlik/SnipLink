@@ -1,0 +1,229 @@
+@page "/links/{Id:guid}/analytics"
+@rendermode InteractiveServer
+@inject AuthStateService AuthState
+@inject SnipLinkApiClient ApiClient
+@inject NavigationManager Nav
+@inject NotificationService NotificationService
+
+<PageTitle>Analytics &mdash; SnipLink</PageTitle>
+
+@if (!AuthState.IsAuthenticated)
+{
+    <p>Redirecting...</p>
+    return;
+}
+
+<div class="d-flex align-items-center gap-3 rz-mb-4">
+    <RadzenButton Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                  Click="@(() => Nav.NavigateTo("/links"))" />
+    <h2 class="rz-m-0">Analytics@(link is not null ? $" — /{link.Slug}" : "")</h2>
+</div>
+
+@if (isLoading)
+{
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+}
+else if (analytics is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="false">
+        Could not load analytics data.
+    </RadzenAlert>
+}
+else
+{
+    <RadzenRow class="rz-mb-4" Gap="1rem">
+        <RadzenColumn Size="12" SizeMD="4">
+            <RadzenCard class="stat-card">
+                <p class="stat-label">Total Clicks</p>
+                <p class="stat-value">@analytics.TotalClicks.ToString("N0")</p>
+            </RadzenCard>
+        </RadzenColumn>
+        @if (link is not null)
+        {
+            <RadzenColumn Size="12" SizeMD="4">
+                <RadzenCard class="stat-card">
+                    <p class="stat-label">Short URL</p>
+                    <a href="@link.ShortUrl" target="_blank" class="rz-color-primary" style="word-break:break-all">
+                        @link.ShortUrl
+                    </a>
+                </RadzenCard>
+            </RadzenColumn>
+            <RadzenColumn Size="12" SizeMD="4">
+                <RadzenCard class="stat-card">
+                    <p class="stat-label">Status</p>
+                    @if (link.IsActive)
+                    {
+                        <RadzenBadge BadgeStyle="BadgeStyle.Success" Text="Active" />
+                    }
+                    else
+                    {
+                        <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="Disabled" />
+                    }
+                </RadzenCard>
+            </RadzenColumn>
+        }
+    </RadzenRow>
+
+    @* Days selector *@
+    <div class="d-flex align-items-center gap-2 rz-mb-3">
+        <span class="rz-text-secondary-500">Period:</span>
+        @foreach (var d in new[] { 7, 14, 30, 90 })
+        {
+            <RadzenButton Text="@($"{d}d")"
+                          ButtonStyle="@(selectedDays == d ? ButtonStyle.Primary : ButtonStyle.Light)"
+                          Size="ButtonSize.Small"
+                          Click="@(() => ChangeDays(d))" />
+        }
+    </div>
+
+    @* Clicks over time *@
+    @if (chartPoints.Count > 0)
+    {
+        <RadzenCard class="rz-mb-4">
+            <h4 class="rz-mb-3">Clicks Over Time</h4>
+            <RadzenChart>
+                <RadzenLineSeries Data="@chartPoints" CategoryProperty="Label" ValueProperty="Clicks"
+                                  TItem="ChartPoint" Title="Clicks">
+                    <RadzenMarkers MarkerType="MarkerType.Circle" />
+                </RadzenLineSeries>
+                <RadzenCategoryAxis />
+                <RadzenValueAxis />
+            </RadzenChart>
+        </RadzenCard>
+    }
+
+    <RadzenRow class="rz-mb-4" Gap="1rem">
+        @* Device breakdown *@
+        @if (analytics.DeviceBreakdown.Count > 0)
+        {
+            <RadzenColumn Size="12" SizeMD="6">
+                <RadzenCard>
+                    <h4 class="rz-mb-3">Device Breakdown</h4>
+                    <RadzenChart>
+                        <RadzenPieSeries Data="@analytics.DeviceBreakdown" CategoryProperty="DeviceType"
+                                         ValueProperty="Clicks" TItem="DeviceBreakdown" Title="Devices" />
+                    </RadzenChart>
+                </RadzenCard>
+            </RadzenColumn>
+        }
+
+        @* Top countries *@
+        @if (analytics.TopCountries.Count > 0)
+        {
+            <RadzenColumn Size="12" SizeMD="6">
+                <RadzenCard>
+                    <h4 class="rz-mb-3">Top Countries</h4>
+                    <RadzenDataGrid Data="@analytics.TopCountries" TItem="CountryBreakdown">
+                        <Columns>
+                            <RadzenDataGridColumn TItem="CountryBreakdown" Property="Country" Title="Country" />
+                            <RadzenDataGridColumn TItem="CountryBreakdown" Property="Clicks" Title="Clicks" Width="100px" />
+                        </Columns>
+                    </RadzenDataGrid>
+                </RadzenCard>
+            </RadzenColumn>
+        }
+    </RadzenRow>
+
+    @* Top referrers *@
+    @if (analytics.TopReferrers.Count > 0)
+    {
+        <RadzenCard class="rz-mb-4">
+            <h4 class="rz-mb-3">Top Referrers</h4>
+            <RadzenDataGrid Data="@analytics.TopReferrers" TItem="ReferrerBreakdown">
+                <Columns>
+                    <RadzenDataGridColumn TItem="ReferrerBreakdown" Property="Host" Title="Referrer" />
+                    <RadzenDataGridColumn TItem="ReferrerBreakdown" Property="Clicks" Title="Clicks" Width="100px" />
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    }
+
+    @* QR Code *@
+    <RadzenCard>
+        <h4 class="rz-mb-3">QR Code</h4>
+        @if (qrCode is not null)
+        {
+            <div class="qr-container rz-mb-3">
+                <img src="data:image/png;base64,@qrCode.PngBase64"
+                     alt="QR code for @qrCode.ShortUrl"
+                     style="max-width:200px; border-radius:8px;" />
+            </div>
+        }
+        <RadzenButton Text="@(qrCode is null ? "Generate QR Code" : "Regenerate QR Code")"
+                      Icon="qr_code"
+                      ButtonStyle="ButtonStyle.Light"
+                      IsBusy="@isQrLoading"
+                      Click="@GenerateQrCode" />
+    </RadzenCard>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private AnalyticsSummary? analytics;
+    private LinkResponse? link;
+    private QrCodeResponse? qrCode;
+    private List<ChartPoint> chartPoints = [];
+    private bool isLoading = true;
+    private bool isQrLoading;
+    private int selectedDays = 30;
+
+    private record ChartPoint(string Label, long Clicks);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        var (analyticsTask, linkTask) = (
+            ApiClient.GetAnalyticsAsync(Id, selectedDays),
+            ApiClient.GetLinkAsync(Id));
+
+        await Task.WhenAll(analyticsTask, linkTask);
+        analytics = await analyticsTask;
+        link = await linkTask;
+
+        BuildChartPoints();
+        isLoading = false;
+    }
+
+    private void BuildChartPoints()
+    {
+        chartPoints = analytics?.ClicksOverTime
+            .Select(p => new ChartPoint(p.Date.ToString("MMM d"), p.Clicks))
+            .ToList() ?? [];
+    }
+
+    private async Task ChangeDays(int days)
+    {
+        selectedDays = days;
+        isLoading = true;
+        analytics = await ApiClient.GetAnalyticsAsync(Id, selectedDays);
+        BuildChartPoints();
+        isLoading = false;
+    }
+
+    private async Task GenerateQrCode()
+    {
+        isQrLoading = true;
+        qrCode = await ApiClient.GetQrCodeAsync(Id);
+        if (qrCode is null)
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Error,
+                Summary = "Failed to generate QR code",
+                Duration = 3000
+            });
+        }
+        isQrLoading = false;
+    }
+}

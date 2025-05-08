@@ -1,0 +1,177 @@
+@page "/links/create"
+@rendermode InteractiveServer
+@inject AuthStateService AuthState
+@inject SnipLinkApiClient ApiClient
+@inject NavigationManager Nav
+
+<PageTitle>Create Link &mdash; SnipLink</PageTitle>
+
+@if (!AuthState.IsAuthenticated)
+{
+    <p>Redirecting...</p>
+    return;
+}
+
+<h2 class="rz-mb-4">Create Short Link</h2>
+
+@if (createdLink is not null)
+{
+    <RadzenCard class="rz-mb-4 success-card">
+        <h4 class="rz-mb-3" style="color: var(--rz-success)">Link Created!</h4>
+
+        <div class="rz-mb-3">
+            <p class="rz-text-secondary-500 rz-mb-1">Short URL</p>
+            <div class="d-flex align-items-center gap-2">
+                <a href="@createdLink.ShortUrl" target="_blank" class="rz-color-primary short-url-display">
+                    @createdLink.ShortUrl
+                </a>
+                <RadzenButton Icon="content_copy" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                              Click="@CopyShortUrl" title="Copy to clipboard" />
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(createdLink.Title))
+        {
+            <p class="rz-mb-1"><strong>Title:</strong> @createdLink.Title</p>
+        }
+        <p class="rz-mb-1"><strong>Destination:</strong>
+            <a href="@createdLink.OriginalUrl" target="_blank" class="rz-color-secondary">
+                @Truncate(createdLink.OriginalUrl, 80)
+            </a>
+        </p>
+        <p class="rz-mb-3"><strong>Slug:</strong> @createdLink.Slug</p>
+
+        <div class="d-flex gap-2">
+            <RadzenButton Text="View Analytics" Icon="bar_chart" ButtonStyle="ButtonStyle.Primary"
+                          Click="@(() => Nav.NavigateTo($"/links/{createdLink.Id}/analytics"))" />
+            <RadzenButton Text="Create Another" Icon="add" ButtonStyle="ButtonStyle.Light"
+                          Click="@ResetForm" />
+        </div>
+    </RadzenCard>
+}
+else
+{
+    @if (errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
+            @errorMessage
+        </RadzenAlert>
+    }
+
+    <RadzenCard>
+        <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
+            <RadzenFormField Text="Destination URL *" class="rz-w-100 rz-mb-3">
+                <RadzenTextBox @bind-Value="@model.OriginalUrl"
+                               Placeholder="https://example.com/very/long/url"
+                               class="rz-w-100" />
+            </RadzenFormField>
+
+            <RadzenFormField Text="Custom Slug (optional)" class="rz-w-100 rz-mb-3">
+                <RadzenTextBox @bind-Value="@model.Slug"
+                               Placeholder="my-custom-slug (leave blank to auto-generate)"
+                               class="rz-w-100" />
+            </RadzenFormField>
+
+            <RadzenFormField Text="Title (optional)" class="rz-w-100 rz-mb-3">
+                <RadzenTextBox @bind-Value="@model.Title"
+                               Placeholder="A friendly name for this link"
+                               class="rz-w-100" />
+            </RadzenFormField>
+
+            <RadzenFormField Text="Expiry Date (optional)" class="rz-w-100 rz-mb-4">
+                <RadzenDatePicker @bind-Value="@model.ExpiresAt"
+                                  Placeholder="No expiry"
+                                  Min="DateTime.Today.AddDays(1)"
+                                  class="rz-w-100" />
+            </RadzenFormField>
+
+            <div class="d-flex gap-2">
+                <RadzenButton ButtonType="ButtonType.Submit"
+                              Text="Create Link"
+                              Icon="add_link"
+                              ButtonStyle="ButtonStyle.Primary"
+                              IsBusy="@isLoading" />
+                <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light"
+                              Click="@(() => Nav.NavigateTo("/links"))" />
+            </div>
+        </RadzenTemplateForm>
+    </RadzenCard>
+}
+
+@inject IJSRuntime JS
+
+@code {
+    private bool isLoading;
+    private string? errorMessage;
+    private LinkResponse? createdLink;
+    private readonly FormModel model = new();
+
+    protected override void OnInitialized()
+    {
+        if (!AuthState.IsAuthenticated)
+            Nav.NavigateTo("/login");
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(model.OriginalUrl))
+        {
+            errorMessage = "Destination URL is required.";
+            return;
+        }
+
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var request = new CreateLinkRequest
+            {
+                OriginalUrl = model.OriginalUrl.Trim(),
+                Slug = string.IsNullOrWhiteSpace(model.Slug) ? null : model.Slug.Trim(),
+                Title = string.IsNullOrWhiteSpace(model.Title) ? null : model.Title.Trim(),
+                ExpiresAt = model.ExpiresAt
+            };
+
+            var (link, error) = await ApiClient.CreateLinkAsync(request);
+            if (error is not null)
+            {
+                errorMessage = error;
+                return;
+            }
+
+            createdLink = link;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        model.OriginalUrl = string.Empty;
+        model.Slug = string.Empty;
+        model.Title = string.Empty;
+        model.ExpiresAt = null;
+        createdLink = null;
+        errorMessage = null;
+    }
+
+    private async Task CopyShortUrl()
+    {
+        if (createdLink is not null)
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", createdLink.ShortUrl);
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
+
+    private class FormModel
+    {
+        public string OriginalUrl { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public DateTime? ExpiresAt { get; set; }
+    }
+}
