@@ -1,0 +1,193 @@
+@page "/links"
+@rendermode InteractiveServer
+@inject AuthStateService AuthState
+@inject SnipLinkApiClient ApiClient
+@inject NavigationManager Nav
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+
+<PageTitle>My Links &mdash; SnipLink</PageTitle>
+
+@if (!AuthState.IsAuthenticated)
+{
+    <p>Redirecting...</p>
+    return;
+}
+
+<div class="d-flex align-items-center justify-content-between rz-mb-4">
+    <h2>My Links</h2>
+    <RadzenButton Text="Create New Link" Icon="add_link" ButtonStyle="ButtonStyle.Primary"
+                  Click="@(() => Nav.NavigateTo("/links/create"))" />
+</div>
+
+<RadzenCard class="rz-mb-4">
+    <RadzenTextBox @bind-Value="@searchTerm"
+                   Placeholder="Search by slug or URL..."
+                   class="rz-w-100"
+                   @oninput="@OnSearchInput" />
+</RadzenCard>
+
+<RadzenDataGrid @ref="grid"
+                Count="@totalCount"
+                Data="@links"
+                TItem="LinkResponse"
+                LoadData="@LoadData"
+                AllowPaging="true"
+                PageSize="20"
+                AllowSorting="true"
+                IsLoading="@isLoading"
+                EmptyText="No links found.">
+    <Columns>
+        <RadzenDataGridColumn TItem="LinkResponse" Property="Slug" Title="Slug" Width="140px">
+            <Template Context="link">
+                <a href="@link.ShortUrl" target="_blank" class="rz-color-primary">@link.Slug</a>
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="LinkResponse" Property="OriginalUrl" Title="Destination">
+            <Template Context="link">
+                <span title="@link.OriginalUrl">@Truncate(link.OriginalUrl, 55)</span>
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="LinkResponse" Property="ClickCount" Title="Clicks" Width="90px" />
+
+        <RadzenDataGridColumn TItem="LinkResponse" Property="IsActive" Title="Status" Width="110px">
+            <Template Context="link">
+                @if (link.IsActive)
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Success" Text="Active" />
+                }
+                else
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="Disabled" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="LinkResponse" Property="CreatedAt" Title="Created" Width="130px">
+            <Template Context="link">
+                @link.CreatedAt.ToString("MMM d, yyyy")
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn TItem="LinkResponse" Title="Actions" Width="150px" Sortable="false">
+            <Template Context="link">
+                <RadzenButton Icon="bar_chart" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                              Click="@(() => Nav.NavigateTo($"/links/{link.Id}/analytics"))"
+                              title="Analytics" class="rz-mr-1" />
+                <RadzenButton Icon="@(link.IsActive ? "pause" : "play_arrow")"
+                              ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                              Click="@(() => ToggleLink(link))"
+                              title="@(link.IsActive ? "Disable" : "Enable")" class="rz-mr-1" />
+                <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                              Click="@(() => ConfirmDelete(link))"
+                              title="Delete" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    private RadzenDataGrid<LinkResponse>? grid;
+    private List<LinkResponse> links = [];
+    private int totalCount;
+    private bool isLoading;
+    private string searchTerm = string.Empty;
+    private System.Timers.Timer? searchDebounce;
+
+    protected override void OnInitialized()
+    {
+        if (!AuthState.IsAuthenticated)
+            Nav.NavigateTo("/login");
+    }
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        isLoading = true;
+        try
+        {
+            var pageSize = args.Top ?? 20;
+            var page = args.Skip.HasValue ? (int)(args.Skip.Value / pageSize) + 1 : 1;
+            var result = await ApiClient.GetLinksAsync(page, pageSize, searchTerm);
+            links = result?.Items.ToList() ?? [];
+            totalCount = result?.TotalCount ?? 0;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        searchDebounce?.Dispose();
+        searchDebounce = new System.Timers.Timer(400);
+        searchDebounce.Elapsed += async (_, _) =>
+        {
+            searchDebounce?.Dispose();
+            await InvokeAsync(async () =>
+            {
+                if (grid is not null) await grid.Reload();
+            });
+        };
+        searchDebounce.AutoReset = false;
+        searchDebounce.Start();
+    }
+
+    private async Task ToggleLink(LinkResponse link)
+    {
+        var updated = await ApiClient.ToggleLinkAsync(link.Id);
+        if (updated is not null)
+        {
+            var idx = links.FindIndex(l => l.Id == link.Id);
+            if (idx >= 0) links[idx] = updated;
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Success,
+                Summary = updated.IsActive ? "Link enabled" : "Link disabled",
+                Duration = 2500
+            });
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmDelete(LinkResponse link)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete the link \"/{link.Slug}\"? This cannot be undone.",
+            "Delete Link",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+
+        if (confirmed != true) return;
+
+        var ok = await ApiClient.DeleteLinkAsync(link.Id);
+        if (ok)
+        {
+            links.RemoveAll(l => l.Id == link.Id);
+            totalCount--;
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Info,
+                Summary = "Link deleted",
+                Duration = 2500
+            });
+            StateHasChanged();
+        }
+        else
+        {
+            NotificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Error,
+                Summary = "Failed to delete link",
+                Duration = 3000
+            });
+        }
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
+
+    public void Dispose() => searchDebounce?.Dispose();
+}

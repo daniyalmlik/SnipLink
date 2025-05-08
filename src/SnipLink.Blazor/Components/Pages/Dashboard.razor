@@ -1,0 +1,117 @@
+@page "/"
+@page "/dashboard"
+@rendermode InteractiveServer
+@inject AuthStateService AuthState
+@inject SnipLinkApiClient ApiClient
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard &mdash; SnipLink</PageTitle>
+
+@if (!AuthState.IsAuthenticated)
+{
+    <p>Redirecting to login...</p>
+    return;
+}
+
+<h2 class="rz-mb-4">Dashboard</h2>
+
+@if (isLoading)
+{
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" Size="ProgressBarCircularSize.Large" />
+}
+else if (dashboard is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="false">
+        Could not load dashboard data. Make sure the API is running.
+    </RadzenAlert>
+}
+else
+{
+    <RadzenRow class="rz-mb-5" Gap="1rem">
+        <RadzenColumn Size="12" SizeMD="4">
+            <RadzenCard class="stat-card">
+                <p class="stat-label">Total Links</p>
+                <p class="stat-value">@dashboard.TotalLinks.ToString("N0")</p>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="4">
+            <RadzenCard class="stat-card">
+                <p class="stat-label">Total Clicks</p>
+                <p class="stat-value">@dashboard.TotalClicks.ToString("N0")</p>
+            </RadzenCard>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="4">
+            <RadzenCard class="stat-card">
+                <p class="stat-label">Clicks Today</p>
+                <p class="stat-value">@dashboard.ClicksToday.ToString("N0")</p>
+            </RadzenCard>
+        </RadzenColumn>
+    </RadzenRow>
+
+    <RadzenCard>
+        <h4 class="rz-mb-3">Top Performing Links</h4>
+        <RadzenDataGrid Data="@dashboard.TopLinks" TItem="LinkResponse" AllowSorting="true">
+            <Columns>
+                <RadzenDataGridColumn TItem="LinkResponse" Property="Slug" Title="Slug" Width="140px">
+                    <Template Context="link">
+                        <a href="@link.ShortUrl" target="_blank" class="rz-color-primary">@link.Slug</a>
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="LinkResponse" Property="OriginalUrl" Title="Destination">
+                    <Template Context="link">
+                        <span title="@link.OriginalUrl">@Truncate(link.OriginalUrl, 60)</span>
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="LinkResponse" Property="ClickCount" Title="Clicks" Width="100px" />
+
+                <RadzenDataGridColumn TItem="LinkResponse" Property="CreatedAt" Title="Created" Width="130px">
+                    <Template Context="link">
+                        @link.CreatedAt.ToString("MMM d, yyyy")
+                    </Template>
+                </RadzenDataGridColumn>
+
+                <RadzenDataGridColumn TItem="LinkResponse" Title="Actions" Width="110px" Sortable="false">
+                    <Template Context="link">
+                        <RadzenButton Icon="bar_chart" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="@(() => Nav.NavigateTo($"/links/{link.Id}/analytics"))"
+                                      title="View analytics" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <div class="rz-mt-4">
+        <RadzenButton Text="Create New Link" Icon="add_link" ButtonStyle="ButtonStyle.Primary"
+                      Click="@(() => Nav.NavigateTo("/links/create"))" />
+        <RadzenButton Text="View All Links" ButtonStyle="ButtonStyle.Light" class="rz-ml-2"
+                      Click="@(() => Nav.NavigateTo("/links"))" />
+    </div>
+}
+
+@code {
+    private DashboardSummary? dashboard;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await LoadDashboard();
+    }
+
+    private async Task LoadDashboard()
+    {
+        isLoading = true;
+        dashboard = await ApiClient.GetDashboardAsync();
+        isLoading = false;
+    }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
+}
