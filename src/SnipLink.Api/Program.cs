@@ -11,7 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Database ──────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
+    options.UseSqlite(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sql => sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)
     ));
@@ -129,10 +129,7 @@ builder.Services.AddHostedService<ClickTrackingWorker>();
 
 // ── Health checks ─────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
-    .AddSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")!,
-        name: "sql",
-        tags: ["db", "sql"]);
+    .AddDbContextCheck<AppDbContext>(name: "db", tags: ["db", "sqlite"]);
 
 // ── Swagger (development only) ────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
