@@ -1,5 +1,6 @@
 @page "/"
 @page "/dashboard"
+@implements IDisposable
 @inject AuthStateService AuthState
 @inject SnipLinkApiClient ApiClient
 @inject NavigationManager Nav
@@ -96,12 +97,22 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        AuthState.OnAuthStateChanged += OnAuthChanged;
+
         if (!AuthState.IsAuthenticated)
         {
             Nav.NavigateTo("/login");
             return;
         }
         await LoadDashboard();
+    }
+
+    private void OnAuthChanged()
+    {
+        if (!AuthState.IsAuthenticated)
+            Nav.NavigateTo("/login");
+        else
+            InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadDashboard()
@@ -113,4 +124,9 @@ else
 
     private static string Truncate(string value, int max) =>
         value.Length <= max ? value : value[..max] + "…";
+
+    public void Dispose()
+    {
+        AuthState.OnAuthStateChanged -= OnAuthChanged;
+    }
 }

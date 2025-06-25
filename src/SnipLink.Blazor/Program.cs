@@ -14,10 +14,18 @@ builder.Services.AddHttpClient("sniplink_api", client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+}).ConfigurePrimaryHttpMessageHandler(() =>
 {
-    AllowAutoRedirect = false,
-    UseCookies = false
+    var handler = new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    };
+    // Dev cert is self-signed and not trusted on Linux; bypass validation locally only.
+    if (builder.Environment.IsDevelopment())
+        handler.ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    return handler;
 });
 
 builder.Services.AddScoped<SnipLinkApiClient>();
