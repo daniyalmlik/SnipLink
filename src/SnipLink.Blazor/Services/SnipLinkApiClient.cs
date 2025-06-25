@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using SnipLink.Shared.DTOs;
 using SnipLink.Shared.DTOs.Analytics;
 
@@ -57,7 +58,7 @@ public class SnipLinkApiClient
         catch { return (null, "Could not reach the server."); }
 
         if (!resp.IsSuccessStatusCode)
-            return (null, await ReadErrorAsync(resp) ?? "Registration failed.");
+            return (null, await ReadIdentityErrorAsync(resp) ?? "Registration failed.");
 
         CaptureCookies(resp);
         return (await resp.Content.ReadFromJsonAsync<AuthResponse>(), null);
@@ -223,6 +224,32 @@ public class SnipLinkApiClient
         {
             var body = await response.Content.ReadAsStringAsync();
             return string.IsNullOrWhiteSpace(body) ? null : body;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Parses ASP.NET Identity's {"errors":["..."]} BadRequest format.</summary>
+    private static async Task<string?> ReadIdentityErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return null;
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("errors", out var errorsEl) &&
+                errorsEl.ValueKind == JsonValueKind.Array)
+            {
+                var messages = errorsEl.EnumerateArray()
+                    .Select(e => e.GetString())
+                    .Where(s => s is not null)
+                    .ToList();
+
+                if (messages.Count > 0)
+                    return string.Join(" ", messages);
+            }
+
+            return body;
         }
         catch { return null; }
     }

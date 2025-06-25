@@ -1,26 +1,26 @@
-@page "/login"
+@page "/register"
 @layout SnipLink.Blazor.Components.Layout.MinimalLayout
 @inject AuthStateService AuthState
 @inject NavigationManager Nav
 
-<PageTitle>Sign In &mdash; SnipLink</PageTitle>
+<PageTitle>Create Account &mdash; SnipLink</PageTitle>
 
 <div class="login-container">
     <RadzenCard class="login-card">
-        <h2>Welcome back</h2>
+        <h2>Create Account</h2>
 
         @if (errorMessage is not null)
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
                 @errorMessage
-                @if (showNoAccountHint)
-                {
-                    <span> <a href="/register" class="auth-toggle-link">Create one</a></span>
-                }
             </RadzenAlert>
         }
 
         <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
+            <RadzenFormField Text="Display Name" class="rz-w-100 rz-mb-3">
+                <RadzenTextBox @bind-Value="@model.DisplayName" Placeholder="Your name" class="rz-w-100" />
+            </RadzenFormField>
+
             <RadzenFormField Text="Email" class="rz-w-100 rz-mb-3">
                 <RadzenTextBox @bind-Value="@model.Email" Placeholder="you@example.com" InputType="InputType.Email" class="rz-w-100" />
             </RadzenFormField>
@@ -31,7 +31,7 @@
                     <input type="@(showPassword ? "text" : "password")"
                            @bind="@model.Password"
                            @bind:event="oninput"
-                           placeholder="Password"
+                           placeholder="Min 12 characters"
                            class="rz-textbox rz-w-100 password-input" />
                     <button type="button" class="eye-toggle" @onclick="TogglePassword" tabindex="-1">
                         @if (showPassword)
@@ -54,15 +54,15 @@
             </div>
 
             <RadzenButton ButtonType="ButtonType.Submit"
-                          Text="Sign In"
+                          Text="Create Account"
                           ButtonStyle="ButtonStyle.Primary"
                           class="rz-w-100 rz-mb-3"
                           IsBusy="@isLoading" />
         </RadzenTemplateForm>
 
         <p class="auth-footer-text">
-            <span>No account? </span>
-            <a href="/register" class="auth-toggle-link">Create one</a>
+            <span>Already have an account? </span>
+            <a href="/login" class="auth-toggle-link">Sign in</a>
         </p>
     </RadzenCard>
 </div>
@@ -70,7 +70,6 @@
 @code {
     private bool isLoading;
     private bool showPassword;
-    private bool showNoAccountHint;
     private string? errorMessage;
     private readonly FormModel model = new();
 
@@ -85,23 +84,28 @@
     private async Task HandleSubmit()
     {
         errorMessage = null;
-        showNoAccountHint = false;
+
+        if (string.IsNullOrWhiteSpace(model.DisplayName))
+        {
+            errorMessage = "Display name is required.";
+            return;
+        }
+
         isLoading = true;
         StateHasChanged();
 
         try
         {
-            var error = await AuthState.LoginAsync(new LoginRequest
+            var error = await AuthState.RegisterAsync(new RegisterRequest
             {
                 Email = model.Email,
-                Password = model.Password
+                Password = model.Password,
+                DisplayName = model.DisplayName
             });
 
             if (error is not null)
             {
                 errorMessage = error;
-                showNoAccountHint = error.Contains("Invalid email or password", StringComparison.OrdinalIgnoreCase);
-                StateHasChanged();
                 return;
             }
 
@@ -118,5 +122,6 @@
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
     }
 }

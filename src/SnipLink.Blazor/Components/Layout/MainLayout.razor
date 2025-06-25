@@ -1,50 +1,45 @@
-
 @inherits LayoutComponentBase
 @inject AuthStateService AuthState
 @inject NavigationManager Nav
 
-<RadzenLayout>
-    <RadzenHeader>
-        <div class="rz-p-4 d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center gap-4">
-                <a href="/" class="brand-link">
-                    <strong>SnipLink</strong>
-                </a>
-                @if (AuthState.IsAuthenticated)
-                {
-                    <NavLink href="/dashboard" Match="NavLinkMatch.All" class="rz-color-on-primary-light nav-item">Dashboard</NavLink>
-                    <NavLink href="/links" class="rz-color-on-primary-light nav-item">My Links</NavLink>
-                    <NavLink href="/links/create" class="rz-color-on-primary-light nav-item">Create Link</NavLink>
-                }
-            </div>
-            <div class="d-flex align-items-center gap-3">
-                @if (AuthState.IsAuthenticated)
-                {
-                    <span class="rz-text-secondary-500">@AuthState.CurrentUser!.Email</span>
-                    <RadzenButton Text="Logout" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
-                                  Click="@HandleLogout" />
-                }
-                else
-                {
-                    <RadzenButton Text="Login" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small"
-                                  Click="@(() => Nav.NavigateTo("/login"))" />
-                }
-            </div>
-        </div>
-    </RadzenHeader>
+<header class="snip-header">
+    <a href="/" class="snip-brand">Snip<span class="snip-brand-suffix">Link</span></a>
 
-    <RadzenBody>
-        <div class="rz-p-4">
-            @Body
-        </div>
-    </RadzenBody>
+    @if (AuthState.IsAuthenticated)
+    {
+        <nav class="snip-nav">
+            <NavLink href="/dashboard" Match="NavLinkMatch.All" class="snip-nav-link" ActiveClass="active">Dashboard</NavLink>
+            <NavLink href="/links" class="snip-nav-link" ActiveClass="active">My Links</NavLink>
+            <NavLink href="/links/create" class="snip-nav-link" ActiveClass="active">Create Link</NavLink>
+        </nav>
+    }
+    else
+    {
+        <div style="flex:1"></div>
+    }
 
-    <RadzenFooter>
-        <div class="rz-p-3 rz-text-align-center rz-text-secondary-500">
-            &copy; @DateTime.Now.Year SnipLink &mdash; Short links, big impact.
-        </div>
-    </RadzenFooter>
-</RadzenLayout>
+    <div class="snip-header-actions">
+        @if (AuthState.IsAuthenticated)
+        {
+            <span class="snip-user-email">@AuthState.CurrentUser!.Email</span>
+            <RadzenButton Text="Logout" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                          Click="@HandleLogout" />
+        }
+        else
+        {
+            <RadzenButton Text="Sign In" ButtonStyle="ButtonStyle.Primary" Size="ButtonSize.Small"
+                          Click="@(() => Nav.NavigateTo("/login"))" />
+        }
+    </div>
+</header>
+
+<main class="snip-page-body">
+    @Body
+</main>
+
+<footer class="snip-footer">
+    &copy; @DateTime.Now.Year SnipLink &mdash; Short links, big impact.
+</footer>
 
 <RadzenComponents />
 
