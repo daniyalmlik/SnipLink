@@ -39,11 +39,8 @@ public class AuthStateService
     /// <summary>Returns null on success, or an error message on failure.</summary>
     public async Task<string?> RegisterAsync(RegisterRequest request)
     {
-        var (response, error) = await _api.RegisterAsync(request);
-        if (response is null) return error;
-        CurrentUser = response.User;
-        OnAuthStateChanged?.Invoke();
-        return null;
+        var (success, error) = await _api.RegisterAsync(request);
+        return success ? null : error;
     }
 
     public async Task LogoutAsync()

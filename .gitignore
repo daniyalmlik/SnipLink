@@ -71,6 +71,7 @@ ScaffoldingReadMe.txt
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Staging.json
+appsettings.Local.json
 **/secrets.json
 **/*.pfx
 **/*.p12

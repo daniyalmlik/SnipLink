@@ -2,12 +2,16 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SnipLink.Api.Data;
 using SnipLink.Api.Domain;
 using SnipLink.Api.Middleware;
+using SnipLink.Api.Options;
 using SnipLink.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
 // ── Database ──────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -31,7 +35,8 @@ builder.Services
         options.Lockout.DefaultLockoutTimeSpan   = TimeSpan.FromMinutes(15);
         options.Lockout.AllowedForNewUsers       = true;
 
-        options.User.RequireUniqueEmail          = true;
+        options.User.RequireUniqueEmail             = true;
+        options.SignIn.RequireConfirmedEmail         = true;
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
@@ -113,6 +118,27 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()));
+
+// ── Email ─────────────────────────────────────────────────────────────────────
+builder.Services.Configure<EmailOptions>(
+    builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.Configure<ResendOptions>(
+    builder.Configuration.GetSection(ResendOptions.SectionName));
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IEmailService>(sp =>
+{
+    var resendOpts = sp.GetRequiredService<IOptions<ResendOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(resendOpts.ApiKey))
+        return new ResendEmailService(
+            sp.GetRequiredService<IOptions<ResendOptions>>(),
+            sp.GetRequiredService<IOptions<EmailOptions>>(),
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            sp.GetRequiredService<ILogger<ResendEmailService>>());
+
+    return new SmtpEmailService(
+        sp.GetRequiredService<IOptions<EmailOptions>>(),
+        sp.GetRequiredService<ILogger<SmtpEmailService>>());
+});
 
 // ── Application services ──────────────────────────────────────────────────────
 builder.Services.AddScoped<ISlugGenerator, SlugGenerator>();

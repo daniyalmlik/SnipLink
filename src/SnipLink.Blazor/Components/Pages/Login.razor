@@ -2,6 +2,7 @@
 @layout SnipLink.Blazor.Components.Layout.MinimalLayout
 @inject AuthStateService AuthState
 @inject NavigationManager Nav
+@inject SnipLinkApiClient Api
 
 <PageTitle>Sign In &mdash; SnipLink</PageTitle>
 
@@ -18,6 +19,31 @@
                     <span> <a href="/register" class="auth-toggle-link">Create one</a></span>
                 }
             </RadzenAlert>
+        }
+
+        @if (showUnverifiedBanner)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="false" class="rz-mb-3">
+                Your email is not verified yet.
+                @if (resendLoading)
+                {
+                    <span> Sending...</span>
+                }
+                else if (resendSent)
+                {
+                    <span> Verification email resent — check your inbox.</span>
+                }
+                else
+                {
+                    <span> <a href="#" class="auth-toggle-link" @onclick="HandleResend" @onclick:preventDefault>Click here to resend the verification email.</a></span>
+                }
+            </RadzenAlert>
+            @if (resendError is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-2">
+                    @resendError
+                </RadzenAlert>
+            }
         }
 
         <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
@@ -71,6 +97,10 @@
     private bool isLoading;
     private bool showPassword;
     private bool showNoAccountHint;
+    private bool showUnverifiedBanner;
+    private bool resendLoading;
+    private bool resendSent;
+    private string? resendError;
     private string? errorMessage;
     private readonly FormModel model = new();
 
@@ -82,10 +112,32 @@
 
     private void TogglePassword() => showPassword = !showPassword;
 
+    private async Task HandleResend()
+    {
+        resendError = null;
+        resendSent  = false;
+        resendLoading = true;
+        StateHasChanged();
+        try
+        {
+            var err = await Api.ResendVerificationAsync(model.Email);
+            if (err is not null) resendError = err;
+            else resendSent = true;
+        }
+        finally
+        {
+            resendLoading = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task HandleSubmit()
     {
         errorMessage = null;
         showNoAccountHint = false;
+        showUnverifiedBanner = false;
+        resendSent = false;
+        resendError = null;
         isLoading = true;
         StateHasChanged();
 
@@ -99,8 +151,15 @@
 
             if (error is not null)
             {
-                errorMessage = error;
-                showNoAccountHint = error.Contains("Invalid email or password", StringComparison.OrdinalIgnoreCase);
+                if (error.Contains("verify your email", StringComparison.OrdinalIgnoreCase))
+                {
+                    showUnverifiedBanner = true;
+                }
+                else
+                {
+                    errorMessage = error;
+                    showNoAccountHint = error.Contains("Invalid email or password", StringComparison.OrdinalIgnoreCase);
+                }
                 StateHasChanged();
                 return;
             }
