@@ -2,6 +2,7 @@
 @layout SnipLink.Blazor.Components.Layout.MinimalLayout
 @inject AuthStateService AuthState
 @inject NavigationManager Nav
+@inject SnipLinkApiClient Api
 
 <PageTitle>Create Account &mdash; SnipLink</PageTitle>
 
@@ -9,68 +10,111 @@
     <RadzenCard class="login-card">
         <h2>Create Account</h2>
 
-        @if (errorMessage is not null)
+        @if (registered)
         {
-            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
-                @errorMessage
+            <RadzenAlert AlertStyle="AlertStyle.Success" ShowIcon="false" class="rz-mb-3">
+                Account created! We've sent a verification email to <strong>@registeredEmail</strong>.
+                Please check your inbox and click the link to activate your account.
             </RadzenAlert>
+
+            @if (resendError is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-2">
+                    @resendError
+                </RadzenAlert>
+            }
+            @if (resendSent)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Info" ShowIcon="false" class="rz-mb-2">
+                    Verification email resent! Check your inbox.
+                </RadzenAlert>
+            }
+
+            <p class="auth-footer-text">
+                Didn't receive it?
+                @if (resendLoading)
+                {
+                    <span class="auth-toggle-link"> Sending...</span>
+                }
+                else
+                {
+                    <a href="#" class="auth-toggle-link" @onclick="HandleResend" @onclick:preventDefault>click here</a>
+                }
+            </p>
+            <p class="auth-footer-text">
+                Already verified? <a href="/login" class="auth-toggle-link">Sign in</a>
+            </p>
         }
+        else
+        {
+            @if (errorMessage is not null)
+            {
+                <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
+                    @errorMessage
+                </RadzenAlert>
+            }
 
-        <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
-            <RadzenFormField Text="Display Name" class="rz-w-100 rz-mb-3">
-                <RadzenTextBox @bind-Value="@model.DisplayName" Placeholder="Your name" class="rz-w-100" />
-            </RadzenFormField>
+            <RadzenTemplateForm TItem="FormModel" Data="@model" Submit="@HandleSubmit">
+                <RadzenFormField Text="Display Name" class="rz-w-100 rz-mb-3">
+                    <RadzenTextBox @bind-Value="@model.DisplayName" Placeholder="Your name" class="rz-w-100" />
+                </RadzenFormField>
 
-            <RadzenFormField Text="Email" class="rz-w-100 rz-mb-3">
-                <RadzenTextBox @bind-Value="@model.Email" Placeholder="you@example.com" InputType="InputType.Email" class="rz-w-100" />
-            </RadzenFormField>
+                <RadzenFormField Text="Email" class="rz-w-100 rz-mb-3">
+                    <RadzenTextBox @bind-Value="@model.Email" Placeholder="you@example.com" InputType="InputType.Email" class="rz-w-100" />
+                </RadzenFormField>
 
-            <div class="rz-w-100 rz-mb-4">
-                <label class="field-label">Password</label>
-                <div class="password-wrapper">
-                    <input type="@(showPassword ? "text" : "password")"
-                           @bind="@model.Password"
-                           @bind:event="oninput"
-                           placeholder="Min 12 characters"
-                           class="rz-textbox rz-w-100 password-input" />
-                    <button type="button" class="eye-toggle" @onclick="TogglePassword" tabindex="-1">
-                        @if (showPassword)
-                        {
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                                <line x1="1" y1="1" x2="23" y2="23"/>
-                            </svg>
-                        }
-                        else
-                        {
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                        }
-                    </button>
+                <div class="rz-w-100 rz-mb-4">
+                    <label class="field-label">Password</label>
+                    <div class="password-wrapper">
+                        <input type="@(showPassword ? "text" : "password")"
+                               @bind="@model.Password"
+                               @bind:event="oninput"
+                               placeholder="Min 12 characters"
+                               class="rz-textbox rz-w-100 password-input" />
+                        <button type="button" class="eye-toggle" @onclick="TogglePassword" tabindex="-1">
+                            @if (showPassword)
+                            {
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            }
+                            else
+                            {
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            }
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <RadzenButton ButtonType="ButtonType.Submit"
-                          Text="Create Account"
-                          ButtonStyle="ButtonStyle.Primary"
-                          class="rz-w-100 rz-mb-3"
-                          IsBusy="@isLoading" />
-        </RadzenTemplateForm>
+                <RadzenButton ButtonType="ButtonType.Submit"
+                              Text="Create Account"
+                              ButtonStyle="ButtonStyle.Primary"
+                              class="rz-w-100 rz-mb-3"
+                              IsBusy="@isLoading" />
+            </RadzenTemplateForm>
 
-        <p class="auth-footer-text">
-            <span>Already have an account? </span>
-            <a href="/login" class="auth-toggle-link">Sign in</a>
-        </p>
+            <p class="auth-footer-text">
+                <span>Already have an account? </span>
+                <a href="/login" class="auth-toggle-link">Sign in</a>
+            </p>
+        }
     </RadzenCard>
 </div>
 
 @code {
     private bool isLoading;
     private bool showPassword;
+    private bool registered;
+    private string? registeredEmail;
     private string? errorMessage;
+    private bool resendLoading;
+    private bool resendSent;
+    private string? resendError;
     private readonly FormModel model = new();
 
     protected override void OnInitialized()
@@ -80,6 +124,28 @@
     }
 
     private void TogglePassword() => showPassword = !showPassword;
+
+    private async Task HandleResend()
+    {
+        resendError = null;
+        resendSent  = false;
+        resendLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var error = await Api.ResendVerificationAsync(registeredEmail!);
+            if (error is not null)
+                resendError = error;
+            else
+                resendSent = true;
+        }
+        finally
+        {
+            resendLoading = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task HandleSubmit()
     {
@@ -109,7 +175,8 @@
                 return;
             }
 
-            Nav.NavigateTo("/dashboard");
+            registeredEmail = model.Email;
+            registered = true;
         }
         finally
         {

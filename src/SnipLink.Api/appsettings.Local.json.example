@@ -1,0 +1,11 @@
+{
+  "Resend": {
+    "ApiKey": "re_YOUR_ACTUAL_KEY_HERE"
+  },
+  "Email": {
+    "From": "noreply@yourdomain.com"
+  },
+  "Frontend": {
+    "BaseUrl": "https://localhost:7129"
+  }
+}

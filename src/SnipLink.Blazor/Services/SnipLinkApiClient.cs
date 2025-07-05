@@ -49,19 +49,44 @@ public class SnipLinkApiClient
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
-    public async Task<(AuthResponse? Result, string? Error)> RegisterAsync(RegisterRequest request)
+    public async Task<(bool Success, string? Error)> RegisterAsync(RegisterRequest request)
     {
         var req = NewRequest(HttpMethod.Post, "api/auth/register");
         req.Content = JsonContent.Create(request);
         HttpResponseMessage resp;
         try { resp = await _http.SendAsync(req); }
-        catch { return (null, "Could not reach the server."); }
+        catch { return (false, "Could not reach the server."); }
 
         if (!resp.IsSuccessStatusCode)
-            return (null, await ReadIdentityErrorAsync(resp) ?? "Registration failed.");
+            return (false, await ReadIdentityErrorAsync(resp) ?? "Registration failed.");
 
-        CaptureCookies(resp);
-        return (await resp.Content.ReadFromJsonAsync<AuthResponse>(), null);
+        return (true, null);
+    }
+
+    public async Task<string?> ResendVerificationAsync(string email)
+    {
+        var req = NewRequest(HttpMethod.Post, "api/auth/resend-verification");
+        req.Content = JsonContent.Create(new ResendVerificationRequest { Email = email });
+        try
+        {
+            var resp = await _http.SendAsync(req);
+            return resp.IsSuccessStatusCode ? null : "Failed to resend. Please try again.";
+        }
+        catch { return "Could not reach the server."; }
+    }
+
+    public async Task<(bool Success, string? Error)> VerifyEmailAsync(string userId, string token)
+    {
+        var url = $"api/auth/verify-email?userId={Uri.EscapeDataString(userId)}&token={Uri.EscapeDataString(token)}";
+        var req = NewRequest(HttpMethod.Get, url);
+        HttpResponseMessage resp;
+        try { resp = await _http.SendAsync(req); }
+        catch { return (false, "Could not reach the server."); }
+
+        if (!resp.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(resp) ?? "Verification failed.");
+
+        return (true, null);
     }
 
     public async Task<(AuthResponse? Result, string? Error)> LoginAsync(LoginRequest request)
@@ -75,7 +100,7 @@ public class SnipLinkApiClient
         if (!resp.IsSuccessStatusCode)
         {
             var error = resp.StatusCode == HttpStatusCode.Unauthorized
-                ? "Invalid email or password."
+                ? await ReadErrorMessageAsync(resp) ?? "Invalid email or password."
                 : await ReadErrorAsync(resp) ?? "Login failed.";
             return (null, error);
         }
@@ -224,6 +249,23 @@ public class SnipLinkApiClient
         {
             var body = await response.Content.ReadAsStringAsync();
             return string.IsNullOrWhiteSpace(body) ? null : body;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Parses a simple {"error":"..."} response body.</summary>
+    private static async Task<string?> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body)) return null;
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var errorEl))
+                return errorEl.GetString();
+
+            return body;
         }
         catch { return null; }
     }
