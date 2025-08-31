@@ -40,6 +40,10 @@ public sealed class SnipLinkWebAppFactory : WebApplicationFactory<Program>, IAsy
             services.PostConfigure<CookieAuthenticationOptions>(
                 IdentityConstants.ApplicationScheme,
                 options => options.Cookie.SecurePolicy = CookieSecurePolicy.None);
+
+            // Skip email confirmation requirement so tests can login immediately after register
+            services.Configure<IdentityOptions>(options =>
+                options.SignIn.RequireConfirmedEmail = false);
         });
     }
 
