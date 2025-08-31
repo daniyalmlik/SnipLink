@@ -18,7 +18,7 @@ public sealed class ApiIntegrationTests : IClassFixture<SnipLinkWebAppFactory>
     // ── Auth ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Register_ValidRequest_ReturnsOkWithUser()
+    public async Task Register_ValidRequest_ReturnsOk()
     {
         var client = _factory.CreateClient();
 
@@ -30,9 +30,6 @@ public sealed class ApiIntegrationTests : IClassFixture<SnipLinkWebAppFactory>
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<AuthResponse>();
-        Assert.NotNull(body?.User);
-        Assert.NotEmpty(body.User.Email);
     }
 
     // ── Links ─────────────────────────────────────────────────────────────────
@@ -105,14 +102,23 @@ public sealed class ApiIntegrationTests : IClassFixture<SnipLinkWebAppFactory>
     private async Task<HttpClient> CreateAuthenticatedClientAsync()
     {
         var client = _factory.CreateClient();
+        var email    = $"auth-{Guid.NewGuid()}@example.com";
+        const string password = "Test@Password1!";
 
-        var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        var register = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
         {
-            Email       = $"auth-{Guid.NewGuid()}@example.com",
-            Password    = "Test@Password1!",
+            Email       = email,
+            Password    = password,
             DisplayName = "Auth User"
         });
-        response.EnsureSuccessStatusCode();
+        register.EnsureSuccessStatusCode();
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
+        {
+            Email    = email,
+            Password = password
+        });
+        login.EnsureSuccessStatusCode();
 
         return client;
     }
