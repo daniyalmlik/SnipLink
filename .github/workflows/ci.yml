@@ -79,8 +79,16 @@ jobs:
       - name: Run container
         run: docker run -d -p 8080:8080 sniplink-api
 
-      - name: Wait for startup
-        run: sleep 10
-
       - name: Health check
-        run: curl -f http://localhost:8080/healthz
+        run: |
+          for i in {1..20}; do
+            if curl -sf http://localhost:8080/healthz; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i/20 failed, retrying in 3s..."
+            sleep 3
+          done
+          echo "Health check timed out after 60 seconds"
+          docker logs $(docker ps -q --filter ancestor=sniplink-api)
+          exit 1
