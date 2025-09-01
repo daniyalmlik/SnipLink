@@ -180,6 +180,13 @@ builder.Services.AddControllers();
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// Apply pending migrations at startup so the schema exists before serving requests
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
