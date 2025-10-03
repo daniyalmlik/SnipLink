@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ValueGeneration;
 using SnipLink.Api.Domain;
 
 namespace SnipLink.Api.Data;
@@ -23,7 +24,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
 
             e.Property(u => u.CreatedAt)
-                .HasDefaultValueSql("GETUTCDATE()");
+                .HasDefaultValueSql(null);
         });
 
         builder.Entity<ShortLink>(e =>
@@ -31,7 +32,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(s => s.Id);
 
             e.Property(s => s.Id)
-                .HasDefaultValueSql("NEWID()");
+                .HasDefaultValueSql(null)
+                .HasValueGenerator<GuidValueGenerator>();
 
             e.Property(s => s.Slug)
                 .HasMaxLength(50)
@@ -52,7 +54,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasDefaultValue(true);
 
             e.Property(s => s.CreatedAt)
-                .HasDefaultValueSql("GETUTCDATE()");
+                .HasDefaultValueSql(null);
 
             e.Property(s => s.ClickCount)
                 .HasDefaultValue(0L);
@@ -68,10 +70,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(c => c.Id);
 
             e.Property(c => c.Id)
-                .HasDefaultValueSql("NEWID()");
+                .HasDefaultValueSql(null)
+                .HasValueGenerator<GuidValueGenerator>();
 
             e.Property(c => c.ClickedAt)
-                .HasDefaultValueSql("GETUTCDATE()");
+                .HasDefaultValueSql(null);
 
             e.Property(c => c.Referrer)
                 .HasMaxLength(2048);
@@ -115,7 +118,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired();
 
             e.Property(b => b.CreatedAt)
-                .HasDefaultValueSql("GETUTCDATE()");
+                .HasDefaultValueSql(null);
         });
     }
 }
