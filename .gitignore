@@ -1,9 +1,3 @@
-## ── Claude Code / Anthropic AI tooling ──────────────────────────────────────
-.claude/
-CLAUDE.md
-.claudeignore
-claude.json
-
 ## ── .NET ─────────────────────────────────────────────────────────────────────
 # Build results
 [Dd]ebug/

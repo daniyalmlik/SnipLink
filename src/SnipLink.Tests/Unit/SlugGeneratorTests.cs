@@ -26,6 +26,8 @@ public sealed class SlugGeneratorTests
     }
 
     [Theory]
+    [InlineData("ab")]
+    [InlineData("me")]
     [InlineData("abc")]
     [InlineData("my-link")]
     [InlineData("a1b2c3")]
@@ -35,7 +37,7 @@ public sealed class SlugGeneratorTests
     }
 
     [Theory]
-    [InlineData("ab")]       // too short
+    [InlineData("a")]        // too short
     [InlineData("")]         // empty
     [InlineData("-abc")]     // starts with hyphen
     [InlineData("abc-")]     // ends with hyphen
