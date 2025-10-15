@@ -101,6 +101,12 @@
             Nav.NavigateTo("/login");
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && grid is not null)
+            await grid.Reload();
+    }
+
     private async Task LoadData(LoadDataArgs args)
     {
         isLoading = true;

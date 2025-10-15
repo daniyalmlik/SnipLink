@@ -10,10 +10,10 @@ public sealed class SlugGenerator : ISlugGenerator
     // Bytes >= 252 are rejected to eliminate modulo bias.
     private const int MaxUnbiased = 252;
 
-    // Pre-compiled: lowercase alphanumeric + hyphens, 3-50 chars,
+    // Pre-compiled: lowercase alphanumeric + hyphens, 2-50 chars,
     // no leading/trailing hyphen, no consecutive hyphens.
     private static readonly Regex ValidSlugRegex =
-        new(@"^[a-z0-9]([a-z0-9\-]{1,48}[a-z0-9]|[a-z0-9]?)$",
+        new(@"^[a-z0-9]([a-z0-9\-]{0,48}[a-z0-9]|[a-z0-9]?)$",
             RegexOptions.Compiled);
 
     public string Generate(int length = 7)
@@ -41,7 +41,7 @@ public sealed class SlugGenerator : ISlugGenerator
     public bool IsValid(string slug)
     {
         if (string.IsNullOrEmpty(slug)) return false;
-        if (slug.Length < 3 || slug.Length > 50) return false;
+        if (slug.Length < 2 || slug.Length > 50) return false;
         return ValidSlugRegex.IsMatch(slug);
     }
 }
