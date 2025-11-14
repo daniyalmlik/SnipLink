@@ -3,6 +3,7 @@
 @inject AuthStateService AuthState
 @inject NavigationManager Nav
 @inject SnipLinkApiClient Api
+@implements IDisposable
 
 <PageTitle>Sign In &mdash; SnipLink</PageTitle>
 
@@ -14,10 +15,6 @@
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
                 @errorMessage
-                @if (showNoAccountHint)
-                {
-                    <span> <a href="/register" class="auth-toggle-link">Create one</a></span>
-                }
             </RadzenAlert>
         }
 
@@ -80,9 +77,10 @@
             </div>
 
             <RadzenButton ButtonType="ButtonType.Submit"
-                          Text="Sign In"
+                          Text="@(cooldownSeconds > 0 ? $"Wait {cooldownSeconds}s\u2026" : "Sign In")"
                           ButtonStyle="ButtonStyle.Primary"
                           class="rz-w-100 rz-mb-3"
+                          Disabled="@(cooldownSeconds > 0)"
                           IsBusy="@isLoading" />
         </RadzenTemplateForm>
 
@@ -96,12 +94,14 @@
 @code {
     private bool isLoading;
     private bool showPassword;
-    private bool showNoAccountHint;
     private bool showUnverifiedBanner;
     private bool resendLoading;
     private bool resendSent;
     private string? resendError;
     private string? errorMessage;
+    private int failedAttempts;
+    private int cooldownSeconds;
+    private System.Threading.Timer? _cooldownTimer;
     private readonly FormModel model = new();
 
     protected override void OnInitialized()
@@ -134,7 +134,6 @@
     private async Task HandleSubmit()
     {
         errorMessage = null;
-        showNoAccountHint = false;
         showUnverifiedBanner = false;
         resendSent = false;
         resendError = null;
@@ -151,6 +150,7 @@
 
             if (error is not null)
             {
+                failedAttempts++;
                 if (error.Contains("verify your email", StringComparison.OrdinalIgnoreCase))
                 {
                     showUnverifiedBanner = true;
@@ -158,12 +158,13 @@
                 else
                 {
                     errorMessage = error;
-                    showNoAccountHint = error.Contains("Invalid email or password", StringComparison.OrdinalIgnoreCase);
                 }
+                ApplyCooldownIfNeeded();
                 StateHasChanged();
                 return;
             }
 
+            failedAttempts = 0;
             Nav.NavigateTo("/dashboard");
         }
         finally
@@ -172,6 +173,27 @@
             StateHasChanged();
         }
     }
+
+    private void ApplyCooldownIfNeeded()
+    {
+        if (failedAttempts < 5) return;
+        cooldownSeconds = (failedAttempts - 4) * 30;
+        _cooldownTimer?.Dispose();
+        _cooldownTimer = new System.Threading.Timer(_ =>
+        {
+            if (cooldownSeconds > 0)
+            {
+                cooldownSeconds--;
+                InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                _cooldownTimer?.Dispose();
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose() => _cooldownTimer?.Dispose();
 
     private class FormModel
     {

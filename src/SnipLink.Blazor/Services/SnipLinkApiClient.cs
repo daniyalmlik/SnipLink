@@ -99,9 +99,8 @@ public class SnipLinkApiClient
 
         if (!resp.IsSuccessStatusCode)
         {
-            var error = resp.StatusCode == HttpStatusCode.Unauthorized
-                ? await ReadErrorMessageAsync(resp) ?? "Invalid email or password."
-                : await ReadErrorAsync(resp) ?? "Login failed.";
+            var error = await ReadErrorMessageAsync(resp)
+                ?? (resp.StatusCode == HttpStatusCode.Unauthorized ? "Invalid email or password." : "Login failed.");
             return (null, error);
         }
 
