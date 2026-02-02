@@ -108,6 +108,38 @@ public class SnipLinkApiClient
         return (await resp.Content.ReadFromJsonAsync<AuthResponse>(), null);
     }
 
+    public async Task<string?> ForgotPasswordAsync(string email)
+    {
+        var req = NewRequest(HttpMethod.Post, "api/auth/forgot-password");
+        req.Content = JsonContent.Create(new ForgotPasswordRequest { Email = email });
+        try
+        {
+            var resp = await _http.SendAsync(req);
+            return resp.IsSuccessStatusCode ? null : "Something went wrong. Please try again.";
+        }
+        catch { return "Could not reach the server."; }
+    }
+
+    public async Task<(bool Success, string? Error)> ResetPasswordAsync(
+        string userId, string token, string newPassword)
+    {
+        var req = NewRequest(HttpMethod.Post, "api/auth/reset-password");
+        req.Content = JsonContent.Create(new ResetPasswordRequest
+        {
+            UserId      = userId,
+            Token       = token,
+            NewPassword = newPassword
+        });
+        HttpResponseMessage resp;
+        try { resp = await _http.SendAsync(req); }
+        catch { return (false, "Could not reach the server."); }
+
+        if (!resp.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(resp) ?? "Password reset failed.");
+
+        return (true, null);
+    }
+
     public async Task LogoutAsync()
     {
         var req = NewRequest(HttpMethod.Post, "api/auth/logout");

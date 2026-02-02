@@ -153,7 +153,91 @@ public sealed class AuthController : ControllerBase
         return Ok(BuildAuthResponse(user).User);
     }
 
+    // ── Forgot password ───────────────────────────────────────────────────────
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        // Always return the same response to prevent user enumeration
+        const string message = "If an account with that email exists, a password reset link has been sent.";
+
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is not null && await _userManager.IsEmailConfirmedAsync(user))
+            await SendPasswordResetEmailAsync(user);
+
+        return Ok(new { message });
+    }
+
+    // ── Reset password ────────────────────────────────────────────────────────
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(request.UserId);
+        if (user is null)
+            return BadRequest(new { error = "Invalid or expired password reset link." });
+
+        string decodedToken;
+        try
+        {
+            decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token));
+        }
+        catch
+        {
+            return BadRequest(new { error = "Invalid or expired password reset link." });
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var firstError = result.Errors.FirstOrDefault()?.Description
+                ?? "Password reset failed. The link may have expired.";
+            return BadRequest(new { error = firstError });
+        }
+
+        return Ok(new { message = "Your password has been reset. You can now sign in." });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private async Task SendPasswordResetEmailAsync(ApplicationUser user)
+    {
+        var rawToken     = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+        var frontendBase = _config["Frontend:BaseUrl"] ?? "https://localhost:7129";
+        var resetUrl     = $"{frontendBase}/reset-password?userId={user.Id}&token={encodedToken}";
+
+        var html = $"""
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+              <h2 style="color:#4f46e5">Reset your SnipLink password</h2>
+              <p>Hi {user.DisplayName},</p>
+              <p>We received a request to reset the password for your account. Click the button below to choose a new password.</p>
+              <a href="{resetUrl}"
+                 style="display:inline-block;padding:12px 24px;background:#4f46e5;color:#fff;
+                        text-decoration:none;border-radius:6px;font-weight:600;margin:16px 0">
+                Reset Password
+              </a>
+              <p style="color:#6b7280;font-size:13px">
+                If the button doesn't work, copy and paste this link into your browser:<br/>
+                <a href="{resetUrl}">{resetUrl}</a>
+              </p>
+              <p style="color:#6b7280;font-size:13px">
+                This link expires in 24 hours. If you didn't request a password reset, you can safely ignore this email — your password will not be changed.
+              </p>
+            </div>
+            """;
+
+        try
+        {
+            await _email.SendAsync(user.Email!, "Reset your SnipLink password", html);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to send password reset email to {Email}. Reset URL: {Url}",
+                user.Email, resetUrl);
+        }
+    }
 
     private async Task SendVerificationEmailAsync(ApplicationUser user)
     {
