@@ -11,7 +11,13 @@
     <RadzenCard class="login-card">
         <h2>Welcome back</h2>
 
-        @if (errorMessage is not null)
+        @if (showNotRegisteredError)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
+                No account found with this email. <a href="/register" class="auth-toggle-link">Register here.</a>
+            </RadzenAlert>
+        }
+        else if (errorMessage is not null)
         {
             <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
                 @errorMessage
@@ -20,7 +26,7 @@
 
         @if (showUnverifiedBanner)
         {
-            <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="false" class="rz-mb-3">
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="false" class="rz-mb-3">
                 Your email is not verified yet.
                 @if (resendLoading)
                 {
@@ -98,6 +104,7 @@
     private bool isLoading;
     private bool showPassword;
     private bool showUnverifiedBanner;
+    private bool showNotRegisteredError;
     private bool resendLoading;
     private bool resendSent;
     private string? resendError;
@@ -138,6 +145,7 @@
     {
         errorMessage = null;
         showUnverifiedBanner = false;
+        showNotRegisteredError = false;
         resendSent = false;
         resendError = null;
         isLoading = true;
@@ -157,6 +165,10 @@
                 if (error.Contains("verify your email", StringComparison.OrdinalIgnoreCase))
                 {
                     showUnverifiedBanner = true;
+                }
+                else if (error.Contains("No account found", StringComparison.OrdinalIgnoreCase))
+                {
+                    showNotRegisteredError = true;
                 }
                 else
                 {

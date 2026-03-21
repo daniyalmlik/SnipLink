@@ -108,6 +108,10 @@ public sealed class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+            return Unauthorized(new { error = "No account found with this email." });
+
         var result = await _signIn.PasswordSignInAsync(
             userName: request.Email,
             password: request.Password,
@@ -122,10 +126,9 @@ public sealed class AuthController : ControllerBase
             return Unauthorized(new { error = "Please verify your email address before signing in." });
 
         if (!result.Succeeded)
-            return Unauthorized(new { error = "Invalid email or password." });
+            return Unauthorized(new { error = "Invalid password." });
 
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        return Ok(BuildAuthResponse(user!));
+        return Ok(BuildAuthResponse(user));
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────
@@ -158,14 +161,14 @@ public sealed class AuthController : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
-        // Always return the same response to prevent user enumeration
-        const string message = "If an account with that email exists, a password reset link has been sent.";
-
         var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is not null && await _userManager.IsEmailConfirmedAsync(user))
+        if (user is null)
+            return NotFound(new { error = "No account found with this email." });
+
+        if (await _userManager.IsEmailConfirmedAsync(user))
             await SendPasswordResetEmailAsync(user);
 
-        return Ok(new { message });
+        return Ok(new { message = "A password reset link has been sent. Check your inbox." });
     }
 
     // ── Reset password ────────────────────────────────────────────────────────

@@ -115,7 +115,12 @@ public class SnipLinkApiClient
         try
         {
             var resp = await _http.SendAsync(req);
-            return resp.IsSuccessStatusCode ? null : "Something went wrong. Please try again.";
+            if (!resp.IsSuccessStatusCode)
+            {
+                var error = await ReadErrorMessageAsync(resp) ?? "Something went wrong. Please try again.";
+                return error;
+            }
+            return null;
         }
         catch { return "Could not reach the server."; }
     }
