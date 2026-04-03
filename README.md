@@ -4,17 +4,6 @@
 
 SnipLink turns long URLs into clean, trackable short links — with click analytics, account-scoped ownership, and sub-200 ms redirects. No third-party dependency on link availability. No ads. No tracking you didn't ask for.
 
----
-
-## Demo
-
-| | |
-|---|---|
-| **Live demo** | _coming soon_ |
-| **Video walkthrough** | _coming soon_ |
-| **Screenshots** | _coming soon_ |
-
----
 
 ## Why This Exists
 
@@ -46,18 +35,6 @@ SnipLink was built with three hard constraints:
 - [x] Docker + docker-compose for one-command deployment
 - [x] GitHub Actions CI: build, test, CodeQL, Docker smoke test
 - [x] Health check endpoint (`/healthz`)
-
-### Roadmap
-
-- [ ] QR code generation per link
-- [ ] Link expiry (TTL)
-- [ ] Password-protected links
-- [ ] Bulk import via CSV
-- [ ] Admin dashboard with cross-user visibility
-- [ ] Redis cache layer for redirect hot path
-- [ ] OpenTelemetry traces + Grafana dashboard
-- [ ] PKCE OAuth login (GitHub, Google)
-- [ ] REST API with API-key auth for programmatic link creation
 
 ---
 
